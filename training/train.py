@@ -7,12 +7,10 @@ model_id="bigscience/bloom-3b"
 tokenizer = BloomTokenizerFast.from_pretrained(model_id,)
 model = BloomForCausalLM.from_pretrained(model_id)
 
-
 dataset = load_dataset("pile-of-law/pile-of-law",'r_legaladvice')
 
 def tokenize_function(examples):
     return tokenizer(examples["text"])
-
 
 tokenized_dataset = dataset.map(tokenize_function, batched=True, num_proc=8, remove_columns=["text","created_timestamp","downloaded_timestamp","url"])
 
@@ -26,7 +24,7 @@ def group_texts(examples):
     total_length = (total_length // block_size) * block_size
     # Split by chunks of max_len.
     result = {
-	k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+        k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
         for k, t in concatenated_examples.items()
     }
     result["labels"] = result["input_ids"].copy()
@@ -35,26 +33,30 @@ def group_texts(examples):
 lm_datasets = tokenized_dataset.map(
     group_texts,
     batched=True,
-    batch_size=1000,
+    batch_size=1200,
     num_proc=8,
 )
 
 training_args = TrainingArguments(
     f"bloom3b-finetuned-pileoflaw_reddit",
-    per_device_train_batch_size=16,
+    per_device_train_batch_size=8,
     gradient_checkpointing=True,
     gradient_accumulation_steps=4,
     optim="adafactor",
     logging_steps=40,
-    save_strategy='epoch',
+    save_strategy='steps',
     weight_decay=0.1,
     learning_rate=5e-6,
     evaluation_strategy='steps',
     eval_steps=400,
     tf32=True,
-    per_device_eval_batch_size=16,
+    per_device_eval_batch_size=8,
+    torch_compile=True,
+    deepspeed="ds_config.json",
+    # report_to=None, # disable the default integrations for logging and tracking
+    # save_total_limit=3, # limit the number of checkpoints to keep on disk
+    # load_best_model_at_end=True # load the best model based on the evaluation metric at the end of training
 )
-
 
 trainer = Trainer(
     model=model,
